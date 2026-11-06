@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Evidență Pacienți</title>
+<style>
+  body { font-family: system-ui, -apple-system, sans-serif; background: #f1f5f9; margin: 0; padding: 12px; }
+  .top-bar { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+  .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  input[type="text"].search { width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 15px; }
+  .btn { border: none; border-radius: 8px; padding: 9px 12px; font-weight: 600; font-size: 13px; cursor: pointer; color: white; }
+  .btn-add { background: #0284c7; }
+  .btn-backup { background: #475569; }
+  .btn-confirm-day { background: #10b981; width: 100%; padding: 12px; font-size: 14px; font-weight: bold; text-align: center; margin-top: 4px; }
+  
+  /* Modal Confirmare Prezență */
+  .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15, 23, 42, 0.6); z-index: 1000; align-items: center; justify-content: center; padding: 16px; }
+  .modal-overlay.active { display: flex; }
+  .modal-card { background: white; border-radius: 12px; width: 100%; max-width: 480px; max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.2); }
+  .modal-header { padding: 14px 16px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; }
+  .modal-title { font-size: 16px; font-weight: 700; color: #0f172a; margin: 0; }
+  .modal-body { padding: 14px 16px; overflow-y: auto; flex-grow: 1; }
+  .modal-footer { padding: 12px 16px; border-top: 1px solid #e2e8f0; display: flex; gap: 8px; justify-content: flex-end; }
+  
+  .presence-row { display: flex; align-items: center; justify-content: space-between; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 8px; background: #f8fafc; }
+  .presence-row label { font-size: 14px; font-weight: 600; color: #1e293b; cursor: pointer; display: flex; align-items: center; gap: 10px; flex-grow: 1; }
+  .presence-row input[type="checkbox"] { width: 20px; height: 20px; accent-color: #10b981; cursor: pointer; }
+
+  /* Day Filter Bar */
+  .days-bar { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 4px; }
+  .btn-day { background: #e2e8f0; border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 10px; font-size: 12px; font-weight: 600; color: #334155; cursor: pointer; white-space: nowrap; }
+  .btn-day.active { background: #0284c7; color: white; border-color: #0284c7; }
+
+  .card { background: #fff; border-radius: 12px; padding: 12px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 6px; }
+  .name { font-size: 16px; font-weight: 600; border: none; outline: none; flex-grow: 1; color: #0f172a; min-width: 0; }
+  .controls { display: flex; align-items: center; gap: 2px; }
+  .btn-order { background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 6px; color: #334155; font-size: 11px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; }
+  .btn-order:disabled { opacity: 0.3; cursor: not-allowed; }
+  
+  .badge { padding: 4px 8px; border-radius: 14px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .ok { background: #e0f2fe; color: #0284c7; }
+  .warn { background: #fef3c7; color: #b45309; }
+  .done { background: #f1f5f9; color: #94a3b8; }
+  .btn-del { background: none; border: none; color: #94a3b8; font-size: 16px; cursor: pointer; padding: 2px 6px; }
+
+  /* Zile săptămână pe card */
+  .patient-days { display: flex; gap: 4px; margin-bottom: 10px; align-items: center; }
+  .label-zile { font-size: 11px; font-weight: 600; color: #64748b; margin-right: 4px; }
+  .day-pill { background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 4px; padding: 2px 6px; font-size: 11px; font-weight: 600; color: #475569; cursor: pointer; }
+  .day-pill.active { background: #10b981; color: white; border-color: #059669; }
+
+  .grid { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; margin-bottom: 10px; }
+  .btn-box { height: 34px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; font-size: 13px; font-weight: 500; cursor: pointer; }
+  .btn-box.active { background: #10b981; color: #fff; border-color: #059669; }
+  
+  /* Secțiune Note Vocale */
+  .voice-section { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px; margin-top: 8px; }
+  .voice-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+  .voice-title { font-size: 12px; font-weight: 600; color: #475569; }
+  .btn-rec { background: #e11d48; color: white; border: none; border-radius: 6px; padding: 4px 10px; font-size: 11px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px; }
+  .btn-rec.recording { background: #dc2626; animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+  
+  .voice-item { display: flex; align-items: center; justify-content: space-between; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 8px; margin-top: 4px; font-size: 12px; }
+  .voice-info { display: flex; align-items: center; gap: 8px; flex-grow: 1; }
+  .btn-play { background: #0284c7; color: white; border: none; border-radius: 4px; padding: 3px 8px; font-size: 11px; cursor: pointer; font-weight: 600; }
+
+  details { margin-top: 8px; font-size: 12px; color: #475569; }
+  summary { cursor: pointer; font-weight: 500; padding: 4px 0; outline: none; }
+  .log-item { padding: 3px 0; border-bottom: 1px dashed #e2e8f0; cursor: pointer; display: flex; justify-content: space-between; }
+  .log-item:hover { background: #f8fafc; color: #0284c7; }
+  #file-backup { display: none; }
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <div class="actions">
+    <button class="btn btn-add" onclick="adaugaPacient()">+ Adaugă Pacient</button>
+    <button class="btn btn-backup" onclick="exportaBackup()">💾 Descarcă Backup</button>
+    <button class="btn btn-backup" onclick="document.getElementById('file-backup').click()">📂 Încarcă Backup</button>
+    <input type="file" id="file-backup" accept=".json" onchange="importaBackup(event)">
+  </div>
+  
+  <button class="btn btn-confirm-day" id="btn-confirm-zile" onclick="deschideModalPrezenta()">✅ Confirmă Prezența de Azi</button>
+
+  <input type="text" id="search" class="search" placeholder="Caută pacient..." oninput="render()">
+  
+  <div class="days-bar" id="days-filter-bar">
+    <button class="btn-day active" onclick="seteazaFiltruZi('toate', this)">📅 Toate</button>
+    <button class="btn-day" onclick="seteazaFiltruZi('luni', this)">Luni</button>
+    <button class="btn-day" onclick="seteazaFiltruZi('marti', this)">Marți</button>
+    <button class="btn-day" onclick="seteazaFiltruZi('miercuri', this)">Miercuri</button>
+    <button class="btn-day" onclick="seteazaFiltruZi('joi', this)">Joi</button>
+    <button class="btn-day" onclick="seteazaFiltruZi('vineri', this)">Vineri</button>
+  </div>
+</div>
+
+<div id="container"></div>
+
+<!-- Modal Bifează Prezența -->
+<div class="modal-overlay" id="modal-prezenta">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h3 class="modal-title" id="modal-title-text">Bifează cine a fost prezent</h3>
+      <button class="btn-del" onclick="inchideModalPrezenta()">✕</button>
+    </div>
+    <div class="modal-body" id="modal-prezenta-list">
+      <!-- Lista pacienților de azi generată dinamic -->
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-backup" onclick="inchideModalPrezenta()">Renunță</button>
+      <button class="btn btn-add" style="background:#10b981;" onclick="salveazaPrezentaModal()">💾 Salvează Prezența</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const STORAGE_KEY = 'pacienti_evidenta_permanenta';
+  
+  let pacienti = JSON.parse(
+    localStorage.getItem(STORAGE_KEY) || 
+    localStorage.getItem('pacienti_manual') || 
+    localStorage.getItem('pacienti_app_v4') || 
+    '[]'
+  );
+
+  pacienti.forEach(p => {
+    if (!p.zile) p.zile = [];
+    if (!p.sedinte) p.sedinte = Array(10).fill(false);
+    if (!p.date) p.date = Array(10).fill(null);
+    if (!p.noteVocale) p.noteVocale = [];
+  });
+
+  let filtruZiCurenta = 'toate';
+
+  function seteazaZiuaCurentaAutomata() {
+    const ziIndex = new Date().getDay();
+    const zileMap = { 1: 'luni', 2: 'marti', 3: 'miercuri', 4: 'joi', 5: 'vineri' };
+    if (zileMap[ziIndex]) {
+      filtruZiCurenta = zileMap[ziIndex];
+    }
+  }
+  seteazaZiuaCurentaAutomata();
+
+  function save() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(pacienti));
+    render();
+  }
+
+  function adaugaPacient() {
+    const nume = prompt("Numele pacientului:");
+    if (!nume || !nume.trim()) return;
+    pacienti.unshift({
+      id: Date.now(),
+      nume: nume.trim(),
+      sedinte: Array(10).fill(false),
+      date: Array(10).fill(null),
+      zile: [],
+      noteVocale: []
+    });
+    save();
+  }
+
+  function stergePacient(id) {
+    if (confirm("Sigur elimini acest pacient?")) {
+      pacienti = pacienti.filter(p => p.id !== id);
+      save();
+    }
+  }
+
+  function mutaSus(index) {
+    if (index > 0) {
+      const temp = pacienti[index];
+      pacienti[index] = pacienti[index - 1];
+      pacienti[index - 1] = temp;
+      save();
+    }
+  }
+
+  function mutaJos(index) {
+    if (index < pacienti.length - 1) {
+      const temp = pacienti[index];
+      pacienti[index] = pacienti[index + 1];
+      pacienti[index + 1] = temp;
+      save();
+    }
+  }
+
+  function toggleZi(id, zi) {
+    const p = pacienti.find(item => item.id === id);
+    if (!p) return;
+    if (!p.zile) p.zile = [];
+    
+    const idx = p.zile.indexOf(zi);
+    if (idx > -1) {
+      p.zile.splice(idx, 1);
+    } else {
+      p.zile.push(zi);
+    }
+    save();
+  }
+
+  function toggle(id, sIdx) {
+    const p = pacienti.find(item => item.id === id);
+    if (!p) return;
+
+    if (!p.sedinte) p.sedinte = Array(10).fill(false);
+    if (!p.date) p.date = Array(10).fill(null);
+
+    p.sedinte[sIdx] = !p.sedinte[sIdx];
+    if (p.sedinte[sIdx]) {
+      const now = new Date();
+      const zi = String(now.getDate()).padStart(2, '0');
+      const luna = String(now.getMonth() + 1).padStart(2, '0');
+      const an = now.getFullYear();
+      const ora = String(now.getHours()).padStart(2, '0');
+      const min = String(now.getMinutes()).padStart(2, '0');
+      p.date[sIdx] = `${zi}.${luna}.${an}, ${ora}:${min}`;
+    } else {
+      p.date[sIdx] = null;
+    }
+    save();
+  }
+
+  /* Logică Modal Confirmare Prezență */
+  function deschideModalPrezenta() {
+    const ziIndex = new Date().getDay();
+    const zileMap = { 1: 'luni', 2: 'marti', 3: 'miercuri', 4: 'joi', 5: 'vineri' };
+    const zileNumeRo = { 0: 'Duminică', 1: 'Luni', 2: 'Marți', 3: 'Miercuri', 4: 'Joi', 5: 'Vineri', 6: 'Sâmbătă' };
+    const ziuaNumeKey = zileMap[ziIndex];
+
+    const modalList = document.getElementById('modal-prezenta-list');
+    const modalTitle = document.getElementById('modal-title-text');
+    modalList.innerHTML = '';
+
+    modalTitle.textContent = `Prezență ${zileNumeRo[ziIndex] || 'Azi'}`;
+
+    const programatiAzi = pacienti.filter(p => p.zile && p.zile.includes(ziuaNumeKey));
+
+    if (programatiAzi.length === 0) {
+      modalList.innerHTML = '<div style="text-align:center; padding:20px; color:#64748b;">Nu ai niciun pacient programat pentru această zi.</div>';
+    } else {
+      programatiAzi.forEach(p => {
+        const facute = p.sedinte.filter(Boolean).length;
+        const row = document.createElement('div');
+        row.className = 'presence-row';
+        row.innerHTML = `
+          <label>
+            <input type="checkbox" class="chk-prezenta" data-id="${p.id}" checked>
+            <span>${p.nume} <small style="color:#64748b; font-weight:normal;">(${facute}/10 ședințe)</small></span>
+          </label>
+        `;
+        modalList.appendChild(row);
+      });
+    }
+
+    document.getElementById('modal-prezenta').classList.add('active');
+  }
+
+  function inchideModalPrezenta() {
+    document.getElementById('modal-prezenta').classList.remove('active');
+  }
+
+  function salveazaPrezentaModal() {
+    const checkes = document.querySelectorAll('.chk-prezenta');
+    if (checkes.length === 0) {
+      inchideModalPrezenta();
+      return;
+    }
+
+    const now = new Date();
+    const ziStr = String(now.getDate()).padStart(2, '0');
+    const lunaStr = String(now.getMonth() + 1).padStart(2, '0');
+    const anStr = now.getFullYear();
+    const oraStr = String(now.getHours()).padStart(2, '0');
+    const minStr = String(now.getMinutes()).padStart(2, '0');
+    const dataCurenta = `${ziStr}.${lunaStr}.${anStr}, ${oraStr}:${minStr}`;
+
+    let bifateCount = 0;
+
+    checkes.forEach(chk => {
+      if (chk.checked) {
+        const id = parseInt(chk.getAttribute('data-id'));
+        const p = pacienti.find(item => item.id === id);
+        if (p) {
+          const primaNeefectuata = p.sedinte.findIndex(s => !s);
+          if (primaNeefectuata !== -1) {
+            p.sedinte[primaNeefectuata] = true;
+            p.date[primaNeefectuata] = dataCurenta;
+            bifateCount++;
+          }
+        }
+      }
+    });
+
+    save();
+    inchideModalPrezenta();
+    if (bifateCount > 0) {
+      alert(`S-a înregistrat prezența și s-a bifat ședința pentru ${bifateCount} pacienți!`);
+    }
+  }
+
+  function modificaData(id, sIdx) {
+    const p = pacienti.find(item => item.id === id);
+    if (!p || !p.date[sIdx]) return;
+    
+    const nouaData = prompt("Modifică data și ora ședinței (ex: 26.10.2026, 17:12):", p.date[sIdx]);
+    if (nouaData !== null) {
+      p.date[sIdx] = nouaData.trim();
+      save();
+    }
+  }
+
+  function updateNume(id, nouNume) {
+    const p = pacienti.find(item => item.id === id);
+    if (p) {
+      p.nume = nouNume;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(pacienti));
+    }
+  }
+
+  function seteazaFiltruZi(zi, elementBtn) {
+    filtruZiCurenta = zi;
+    document.querySelectorAll('.btn-day').forEach(b => b.classList.remove('active'));
+    if (elementBtn) {
+      elementBtn.classList.add('active');
+    }
+    render();
+  }
+
+  let mediaRecorderActive = null;
+  let audioChunksActive = [];
+
+  function pornesteInregistrare(id, btnElement) {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      alert("Browserul tău nu suportă înregistrarea audio.");
+      return;
+    }
+
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+      mediaRecorderActive = new MediaRecorder(stream);
+      audioChunksActive = [];
+
+      mediaRecorderActive.ondataavailable = event => {
+        audioChunksActive.push(event.data);
+      };
+
+      mediaRecorderActive.onstop = () => {
+        const audioBlob = new Blob(audioChunksActive, { type: 'audio/webm' });
+        const reader = new FileReader();
+        reader.readAsDataURL(audioBlob);
+        reader.onloadend = function() {
+          const base64Audio = reader.result;
+          const now = new Date();
+          const dataStr = `${String(now.getDate()).padStart(2, '0')}.${String(now.getMonth() + 1).padStart(2, '0')}.${now.getFullYear()}, ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+          
+          const p = pacienti.find(item => item.id === id);
+          if (p) {
+            if (!p.noteVocale) p.noteVocale = [];
+            p.noteVocale.unshift({ id: Date.now(), data: dataStr, audio: base64Audio });
+            save();
+          }
+        };
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorderActive.start();
+      btnElement.textContent = "⏹️ Oprește";
+      btnElement.classList.add('recording');
+      btnElement.onclick = () => opresteInregistrare(id, btnElement);
+    }).catch(err => {
+      alert("Nu s-a putut accesa microfonul. Verifică permisiunile.");
+    });
+  }
+
+  function opresteInregistrare(id, btnElement) {
+    if (mediaRecorderActive) {
+      mediaRecorderActive.stop();
+      btnElement.textContent = "🎙️ Înregistrează";
+      btnElement.classList.remove('recording');
+      btnElement.onclick = () => pornesteInregistrare(id, btnElement);
+    }
+  }
+
+  function stergeNotaVocala(idPacient, idNota) {
+    if (confirm("Ștergi această înregistrare audio?")) {
+      const p = pacienti.find(item => item.id === idPacient);
+      if (p && p.noteVocale) {
+        p.noteVocale = p.noteVocale.filter(n => n.id !== idNota);
+        save();
+      }
+    }
+  }
+
+  function redaAudio(base64Data) {
+    const audio = new Audio(base64Data);
+    audio.play().catch(e => alert("Eroare la redarea audio."));
+  }
+
+  function exportaBackup() {
+    if (pacienti.length === 0) {
+      alert("Nu există pacienți de salvat.");
+      return;
+    }
+    const blob = new Blob([JSON.stringify(pacienti, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `backup_pacienti_${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  function importaBackup(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        const importati = JSON.parse(e.target.result);
+        if (Array.isArray(importati)) {
+          pacienti = importati.map(p => ({ 
+            ...p, 
+            zile: p.zile || [], 
+            sedinte: p.sedinte || Array(10).fill(false),
+            date: p.date || Array(10).fill(null),
+            noteVocale: p.noteVocale || [] 
+          }));
+          save();
+          alert(`Backup încărcat cu succes! Au fost restaurați ${pacienti.length} pacienți.`);
+        } else {
+          alert("Fișierul de backup este invalid.");
+        }
+      } catch (err) {
+        alert("Eroare la citirea fișierului de backup.");
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  function render() {
+    const q = (document.getElementById('search').value || '').toLowerCase().trim();
+    const c = document.getElementById('container');
+    c.innerHTML = '';
+
+    const ziIndex = new Date().getDay();
+    const zileNumeRo = { 0: 'Duminică', 1: 'Luni', 2: 'Marți', 3: 'Miercuri', 4: 'Joi', 5: 'Vineri', 6: 'Sâmbătă' };
+    const btnConfirm = document.getElementById('btn-confirm-zile');
+    if (btnConfirm) {
+      btnConfirm.textContent = `✅ Confirmă Prezența de ${zileNumeRo[ziIndex] || 'Azi'}`;
+    }
+
+    document.querySelectorAll('.btn-day').forEach(b => {
+      const textBtn = b.textContent.toLowerCase();
+      if ((filtruZiCurenta === 'toate' && textBtn.includes('toate')) || textBtn.includes(filtruZiCurenta)) {
+        b.classList.add('active');
+      } else {
+        b.classList.remove('active');
+      }
+    });
+
+    pacienti.forEach((p, realIndex) => {
+      if (q && !p.nume.toLowerCase().includes(q)) return;
+      if (filtruZiCurenta !== 'toate' && (!p.zile || !p.zile.includes(filtruZiCurenta))) return;
+
+      if (!p.sedinte) p.sedinte = Array(10).fill(false);
+      if (!p.date) p.date = Array(10).fill(null);
+
+      const facute = p.sedinte.filter(Boolean).length;
+      const ramase = 10 - facute;
+      let badge = `<span class="badge ok">${ramase} rămase</span>`;
+      if (ramase <= 0) badge = `<span class="badge done">Finalizat</span>`;
+      else if (ramase <= 2) badge = `<span class="badge warn">⚠️ ${ramase} rămase</span>`;
+
+      const zileSaptamana = [
+        { key: 'luni', label: 'L' },
+        { key: 'marti', label: 'Ma' },
+        { key: 'miercuri', label: 'Mi' },
+        { key: 'joi', label: 'J' },
+        { key: 'vineri', label: 'V' }
+      ];
+
+      const zileHtml = zileSaptamana.map(z => {
+        const activ = p.zile && p.zile.includes(z.key);
+        return `<button class="day-pill ${activ ? 'active' : ''}" onclick="toggleZi(${p.id}, '${z.key}')">${z.label}</button>`;
+      }).join('');
+
+      const istoric = p.date.map((d, idx) => d ? `<div class="log-item" onclick="modificaData(${p.id}, ${idx})" title="Click pentru a edita data"><span>Șed. ${idx + 1}:</span> <b>${d}</b> ✎</div>` : '').filter(Boolean).join('');
+
+      const noteHtml = p.noteVocale && p.noteVocale.length > 0 ? p.noteVocale.map((n) => `
+        <div class="voice-item">
+          <div class="voice-info">
+            <button class="btn-play" onclick="redaAudio('${n.audio}')">▶️ Ascultă (${n.data})</button>
+          </div>
+          <button class="btn-del" title="Șterge nota" onclick="stergeNotaVocala(${p.id}, ${n.id})">✕</button>
+        </div>
+      `).join('') : '<div style="font-size:11px; color:#94a3b8; margin-top:4px;">Nicio înregistrare audio momentan.</div>';
+
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = `
+        <div class="header">
+          <div class="controls">
+            <button class="btn-order" onclick="mutaSus(${realIndex})" ${realIndex === 0 ? 'disabled' : ''}>▲</button>
+            <button class="btn-order" onclick="mutaJos(${realIndex})" ${realIndex === pacienti.length - 1 ? 'disabled' : ''}>▼</button>
+          </div>
+          <input class="name" value="${p.nume}" onchange="updateNume(${p.id}, this.value)" />
+          ${badge}
+          <button class="btn-del" title="Șterge pacient" onclick="stergePacient(${p.id})">✕</button>
+        </div>
+        <div class="patient-days">
+          <span class="label-zile">Zile:</span> ${zileHtml}
+        </div>
+        <div class="grid">
+          ${p.sedinte.map((bifat, i) => `
+            <button class="btn-box ${bifat ? 'active' : ''}" onclick="toggle(${p.id}, ${i})">${i + 1}</button>
+          `).join('')}
+        </div>
+        <div class="voice-section">
+          <div class="voice-header">
+            <span class="voice-title">🎤 Note Vocale (Ce ai făcut / Ce urmează)</span>
+            <button class="btn-rec" onclick="pornesteInregistrare(${p.id}, this)">🎙️ Înregistrează</button>
+          </div>
+          ${noteHtml}
+        </div>
+        ${istoric ? `
+          <details>
+            <summary>📅 Vezi și editează datele ședințelor (${facute})</summary>
+            ${istoric}
+          </details>
+        ` : ''}
+      `;
+      c.appendChild(card);
+    });
+  }
+
+  render();
+</script>
+</body>
+</html>
